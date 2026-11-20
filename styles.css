@@ -57,3 +57,14 @@ body{background:radial-gradient(ellipse 110% 32% at 50% -12%,#145b3b55,transpare
 @keyframes slideUp{from{opacity:.5;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){.tab-page,.btn,.entry{animation:none;transition:none}}
 @media(max-width:380px){.nav-item{font-size:10px}.toolbar{flex-wrap:wrap}}
+
+/* 0.7: favorites, history and lock preferences */
+.favorites-filter{display:flex;align-items:center;gap:8px;margin:14px 0 2px;font-size:13px;color:var(--muted)}
+.favorites-filter input{accent-color:var(--green);width:18px;height:18px}
+.favorite-btn{color:var(--green)!important;font-size:20px!important;min-width:34px}
+.entry-history{border:1px solid var(--line);background:var(--panel2);padding:12px;border-radius:12px;font-size:12px;line-height:1.65;color:var(--muted)}
+.idle-lock-setting{margin:16px 0;padding:14px;background:var(--panel2);border:1px solid var(--line);border-radius:14px}
+.idle-lock-setting label{display:block;font-size:14px;color:var(--text);margin-bottom:4px}
+.idle-lock-setting select{width:100%;margin-top:5px}
+.entry-buttons{flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:420px){.entry{gap:8px}.entry-buttons{max-width:150px}.entry-buttons .btn{font-size:11px;padding:7px 8px}}

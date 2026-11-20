@@ -10,7 +10,15 @@ const DB_NAME = 'bastion-vault-local-v1';
 const STORE_NAME = 'encrypted';
 const RECORD_ID = 'vault';
 const AAD = new TextEncoder().encode('BASTION-VAULT/v1');
-const IDLE_LOCK_MS = 5 * 60_000;
+// Non-sensitive UI preference; never changes the encrypted vault or Face ID keys.
+const LOCK_PREF = 'bastion-idle-lock-v07';
+const LOCK_CHOICES = [0, 1, 5, 15];
+function idleLockMinutes() {
+  try { const saved=localStorage.getItem(LOCK_PREF); if(saved===null)return 5; const n=Number(saved); return LOCK_CHOICES.includes(n) ? n : 5; }
+  catch { return 5; }
+}
+function idleLockMilliseconds() { return idleLockMinutes()*60_000; }
+
 const BACKGROUND_LOCK_MS = 0;
 const MAX_BACKUP_BYTES = 8_000_000;
 const MAX_PASSWORD_LENGTH = 128;
@@ -141,6 +149,7 @@ function showApp() {
   $('app').classList.toggle('hidden', !$('languageSetup').classList.contains('hidden'));
   $('lockBtn').classList.remove('hidden');
   $('search').value = '';
+  $('favoritesOnly').checked=false;
   lastActivity = Date.now();
   renderEntries();
   bioUi();
@@ -206,8 +215,9 @@ function renderEntries() {
   const root = $('entryList');
   root.replaceChildren();
   const needle = $('search').value.trim().toLocaleLowerCase('ru');
-  const filtered = [...vault.entries].filter(item => `${item.service} ${item.login}`.toLocaleLowerCase('ru').includes(needle))
-    .sort((a,b) => a.service.localeCompare(b.service, 'ru'));
+  const onlyFavorites = $('favoritesOnly').checked;
+  const filtered = [...vault.entries].filter(item => `${item.service} ${item.login}`.toLocaleLowerCase('ru').includes(needle) && (!onlyFavorites || item.favorite === true))
+    .sort((a,b) => Number(b.favorite === true)-Number(a.favorite === true) || a.service.localeCompare(b.service, uiLanguage));
   if (filtered.length === 0) {
     const empty = make('div','empty');
     empty.append(make('strong','',vault.entries.length ? 'Ничего не найдено' : 'Здесь появятся твои аккаунты'));
@@ -221,14 +231,35 @@ function renderEntries() {
     body.append(make('div','entry-title',item.service));
     body.append(make('div','entry-login',item.login || 'Логин не указан'));
     const actions = make('div','entry-buttons');
+    const star = make('button','btn ghost small favorite-btn',item.favorite === true ? '★' : '☆');
+    star.type = 'button'; star.title = item.favorite === true ? translateText('Убрать из избранного') : translateText('В избранное');
+    star.setAttribute('aria-label', star.title);
+    star.setAttribute('aria-pressed',String(item.favorite === true));
+    star.addEventListener('click',()=>toggleFavorite(item.id));
+    const loginCopy = make('button','btn ghost small','@');
+    loginCopy.type='button';loginCopy.title=translateText('Копировать логин');loginCopy.setAttribute('aria-label',loginCopy.title);
+    loginCopy.disabled=!item.login;
+    loginCopy.addEventListener('click',()=>copyToClipboard(item.login,translateText('Логин')));
     const copy = make('button','btn secondary small','Копия');
     copy.type = 'button'; copy.title = 'Копировать пароль';
     copy.addEventListener('click', () => copyToClipboard(item.password,'Пароль'));
     const edit = make('button','btn ghost small','Открыть');
     edit.type = 'button'; edit.addEventListener('click', () => openEditor(item.id));
-    actions.append(copy,edit); row.append(mark,body,actions);root.append(row);
+    actions.append(star,loginCopy,copy,edit); row.append(mark,body,actions);root.append(row);
     translateNode(actions);
   }
+}
+async function toggleFavorite(id) {
+  if (!vault || busy) return;
+  const current = vault.entries.find(e=>e.id===id);
+  if (!current) return;
+  busy=true;
+  try {
+    const entries=vault.entries.map(e=>e.id===id ? {...e,favorite:e.favorite!==true} : e);
+    await persistVault({...vault,entries});
+    renderEntries();
+  } catch(e) {toast(e.message||'Не удалось сохранить избранное.');}
+  finally {busy=false;}
 }
 function randomIndex(max) {
   const maxValue = Math.floor(256 / max) * max;
@@ -261,6 +292,9 @@ function openEditor(id = null) {
   $('showSecret').textContent = translateText('Показать');
   $('siteUrl').value = item?.url ?? '';
   $('notes').value = item?.notes ?? '';
+  const fmt = date => {if(!date)return '—';const d=new Date(date);return Number.isNaN(d.valueOf())?'—':new Intl.DateTimeFormat(uiLanguage,{dateStyle:'medium',timeStyle:'short'}).format(d);};
+  $('entryHistory').classList.toggle('hidden',!item);
+  $('entryHistory').textContent = item ? (translateText('Создано')+': '+fmt(item.createdAt)+'  •  '+translateText('Изменено')+': '+fmt(item.updatedAt)) : '';
   translateNode($('editor'));
   $('editor').showModal();
 }
@@ -336,11 +370,11 @@ async function onSaveEntry(event) {
   const now = new Date().toISOString();
   const old = editingId ? vault.entries.find(x => x.id === editingId) : null;
   if (editingId && !old) return toast('Запись не найдена.');
-  const entry = {id: old?.id || crypto.randomUUID(),service,login,password,url,notes,createdAt:old?.createdAt || now,updatedAt:now};
+  const entry = {...(old||{}),id: old?.id || crypto.randomUUID(),service,login,password,url,notes,createdAt:old?.createdAt || now,updatedAt:now};
   const nextEntries = old ? vault.entries.map(x=>x.id===old.id?entry:x) : [...vault.entries,entry];
   setBusy(true,$('saveEntry'));
   try {
-    await persistVault({schema:1,entries:nextEntries});
+    await persistVault({...vault,entries:nextEntries});
     $('editor').close(); $('secret').value = '';
     renderEntries(); $('auditPanel').classList.add('hidden');
     toast('Запись зашифрована и сохранена на устройстве.');
@@ -353,7 +387,7 @@ async function deleteEditingEntry() {
   if (!entry || !confirm(`Удалить «${entry.service}» без возможности восстановления из текущего сейфа?`)) return;
   setBusy(true);
   try {
-    await persistVault({schema:1,entries:vault.entries.filter(e=>e.id!==editingId)});
+    await persistVault({...vault,entries:vault.entries.filter(e=>e.id!==editingId)});
     $('editor').close();$('secret').value='';renderEntries();toast('Запись удалена.');
   }catch(e){toast(e.message||'Ошибка удаления.');}finally{setBusy(false);}
 }
@@ -577,6 +611,15 @@ function attachHandlers() {
   $('lockBtn').addEventListener('click',()=>lockVault());
   $('addBtn').addEventListener('click',()=>openEditor());
   $('search').addEventListener('input',renderEntries);
+  $('favoritesOnly').addEventListener('change',renderEntries);
+  $('idleLockSelect').value=String(idleLockMinutes());
+  $('idleLockSelect').addEventListener('change',()=>{
+    const n=Number($('idleLockSelect').value);
+    if(!LOCK_CHOICES.includes(n))return;
+    try {localStorage.setItem(LOCK_PREF,String(n));}catch {toast('Не удалось сохранить настройку.');return;}
+    lastActivity=Date.now();
+    toast(translateText('Настройка автоблокировки сохранена.'));
+  });
 
   $('exportBtn').addEventListener('click',downloadBackup);
   $('importFile').addEventListener('change',prepareImport);
@@ -622,7 +665,7 @@ function attachHandlers() {
     } else hiddenAt = 0;
   });
   window.addEventListener('pagehide',()=>{resetBioSetup();if(vault)lockVault(false);});
-  setInterval(()=>{if(vault && !document.hidden && Date.now()-lastActivity>=IDLE_LOCK_MS)lockVault();},10_000);
+  setInterval(()=>{const ms=idleLockMilliseconds();if(vault && !document.hidden && ms>0 && Date.now()-lastActivity>=ms)lockVault();},5_000);
 }
 async function init() {
   attachHandlers();
@@ -677,6 +720,22 @@ function translateNode(node){
     for(const child of node.childNodes) translateNode(child);
   }
 }
+Object.assign(UI_EN, {
+  'Только избранное':'Favorites only',
+  'В избранное':'Add to favorites',
+  'Убрать из избранного':'Remove from favorites',
+  'Создано':'Created',
+  'Изменено':'Updated',
+  'Автоблокировка':'Auto-lock',
+  'Когда блокировать сейф при бездействии? При сворачивании приложение блокируется всегда.':'Lock after inactivity. The vault always locks when sent to the background.',
+  'Сразу при сворачивании':'On background only',
+  'Через 1 минуту':'After 1 minute',
+  'Через 5 минут':'After 5 minutes',
+  'Через 15 минут':'After 15 minutes',
+  'Настройка автоблокировки сохранена.':'Auto-lock setting saved.',
+  'История записи':'Entry history',
+  'Логин':'Login'
+});
 function applyLanguage(lang){
   uiLanguage = lang==='ru'?'ru':'en';
   document.documentElement.lang=uiLanguage;
