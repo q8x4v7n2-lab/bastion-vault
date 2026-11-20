@@ -1,6 +1,6 @@
 'use strict';
 
-// BASTION VAULT 0.4: полностью клиентский прототип, не проходил независимый аудит.
+// BASTION VAULT 0.5: полностью клиентский прототип, не проходил независимый аудит.
 // Никаких сетевых запросов, библиотек, серверной синхронизации или аналитики.
 // Весь документ (включая названия сайтов) шифруется одним AES-256-GCM ключом.
 const FORMAT = 'bastion-vault';
@@ -29,7 +29,7 @@ let toastTimer;
 
 function toast(message) {
   const node = $('toast');
-  node.textContent = message;
+  node.textContent = translateText(message);
   node.classList.remove('hidden');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => node.classList.add('hidden'), 4100);
@@ -130,7 +130,7 @@ async function persistVault(nextVault) {
   vault = nextVault;
 }
 function showGate(mode) {
-  $('gate').classList.remove('hidden');
+  $('gate').classList.toggle('hidden', !$('languageSetup').classList.contains('hidden'));
   $('app').classList.add('hidden');
   $('lockBtn').classList.add('hidden');
   $('createView').classList.toggle('hidden', mode !== 'create');
@@ -138,7 +138,7 @@ function showGate(mode) {
 }
 function showApp() {
   $('gate').classList.add('hidden');
-  $('app').classList.remove('hidden');
+  $('app').classList.toggle('hidden', !$('languageSetup').classList.contains('hidden'));
   $('lockBtn').classList.remove('hidden');
   $('search').value = '';
   lastActivity = Date.now();
@@ -211,7 +211,7 @@ function renderEntries() {
     const empty = make('div','empty');
     empty.append(make('strong','',vault.entries.length ? 'Ничего не найдено' : 'Здесь появятся твои аккаунты'));
     empty.append(document.createTextNode(vault.entries.length ? 'Попробуй другой запрос.' : 'Нажми «Добавить запись», чтобы создать первую зашифрованную запись.'));
-    root.append(empty); return;
+    root.append(empty); translateNode(empty); return;
   }
   for (const item of filtered) {
     const row = make('article','entry');
@@ -226,6 +226,7 @@ function renderEntries() {
     const edit = make('button','btn ghost small','Открыть');
     edit.type = 'button'; edit.addEventListener('click', () => openEditor(item.id));
     actions.append(copy,edit); row.append(mark,body,actions);root.append(row);
+    translateNode(actions);
   }
 }
 function randomIndex(max) {
@@ -256,9 +257,10 @@ function openEditor(id = null) {
   $('login').value = item?.login ?? '';
   $('secret').value = item?.password ?? '';
   $('secret').type = 'password';
-  $('showSecret').textContent = 'Показать';
+  $('showSecret').textContent = translateText('Показать');
   $('siteUrl').value = item?.url ?? '';
   $('notes').value = item?.notes ?? '';
+  translateNode($('editor'));
   $('editor').showModal();
 }
 function renderAudit() {
@@ -281,6 +283,7 @@ function renderAudit() {
   const line5 = make('div', empty ? 'bad':'', `Пустые пароли: ${empty}`);
   p.append(line1,line2,line3,line4,line5,hint);
   p.classList.toggle('hidden');
+  translateNode(p);
 }
 async function onCreate(event) {
   event.preventDefault(); if (busy) return;
@@ -433,7 +436,7 @@ function resetBioSetup() {
   setupMaster = null; setupCredential = null; setupSalt = null; setupStoredSalt = null;
   $('bioMaster').value = '';
   $('bioActionBtn').classList.add('hidden');
-  $('bioActionBtn').textContent = 'Продолжить настройку Face ID';
+  $('bioActionBtn').textContent = translateText('Продолжить настройку Face ID');
 }
 function bioFocusReady() {
   if (document.visibilityState !== 'visible' || !document.hasFocus()) {
@@ -461,7 +464,7 @@ async function verifyBioMaster(event) {
     setupStoredSalt = stored.salt;
     setupSalt = randomBytes(32);
     $('bioActionBtn').classList.remove('hidden');
-    $('bioActionBtn').textContent = 'Создать ключ доступа';
+    $('bioActionBtn').textContent = translateText('Создать ключ доступа');
     toast('Пароль подтверждён. Теперь нажми «Создать ключ доступа».');
   } catch(e) {
     resetBioSetup();
@@ -510,8 +513,8 @@ async function performBioSetup() {
     if (!setupCredential) setupCredential = result.rawId;
     const prf = result.getClientExtensionResults()?.prf?.results?.first;
     if (prf) await completeBioSetup(prf);
-    else if ($('bioActionBtn').textContent === 'Создать ключ доступа') {
-      $('bioActionBtn').textContent = 'Завершить настройку Face ID';
+    else if ($('bioActionBtn').textContent === translateText('Создать ключ доступа')) {
+      $('bioActionBtn').textContent = translateText('Завершить настройку Face ID');
       toast('Ключ создан. Нажми «Завершить настройку Face ID».');
     } else throw new Error('WebAuthn PRF не поддерживается. Используй мастер-пароль.');
   } catch(e) {
@@ -567,7 +570,7 @@ function attachHandlers() {
   });
   $('showSecret').addEventListener('click',()=>{
     const show=$('secret').type==='password';$('secret').type=show?'text':'password';
-    $('showSecret').textContent=show?'Скрыть':'Показать';
+    $('showSecret').textContent=translateText(show?'Скрыть':'Показать');
   });
   $('copyLogin').addEventListener('click',()=> $('login').value ? copyToClipboard($('login').value,'Логин') : toast('Логин не указан.'));
   $('copyPassword').addEventListener('click',()=> $('secret').value ? copyToClipboard($('secret').value,'Пароль') : toast('Пароль не указан.'));
@@ -582,7 +585,7 @@ function attachHandlers() {
   $('generateBtn').addEventListener('click',()=>{
     try {
       $('secret').value=generatePassword(Number($('length').value),$('symbols').checked);
-      $('secret').type='password';$('showSecret').textContent='Показать';
+      $('secret').type='password';$('showSecret').textContent=translateText('Показать');
       toast('Новый пароль создан. Он ещё не изменён на сайте!');
     } catch (e) { toast(e.message); }
   });
@@ -606,6 +609,7 @@ function attachHandlers() {
 }
 async function init() {
   attachHandlers();
+  initLanguage();
   // Version label is authored directly in index.html.
   if (!window.isSecureContext || !crypto?.subtle || !window.indexedDB) {
     $('gate').classList.add('hidden');$('unsupported').classList.remove('hidden');return;
@@ -613,6 +617,7 @@ async function init() {
   try {
     db = await openDB();
     const current = await readEncrypted();
+    window.bastionHasVault=!!current;
     showGate(current ? 'unlock' : 'create');
     bioUi();
   } catch(e) {
@@ -622,4 +627,68 @@ async function init() {
   }
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
+
+// GHOST PROTOCOL UI localization. Never translates user secrets or vault contents.
+const LANG_KEY = 'bastion-ui-language-v05';
+const UI_EN = {"BASTION VAULT — приватный сейф": "BASTION VAULT — Private Vault", "🔒 Закрыть": "🔒 Lock", "Нужен защищённый браузер": "Secure browser required", "Для шифрования требуются HTTPS, Web Crypto и локальная база IndexedDB. Открой приложение через HTTPS в Safari.": "Encryption requires HTTPS, Web Crypto and local IndexedDB storage. Open the app over HTTPS.", "ПЕРВЫЙ ЗАПУСК": "INITIAL SETUP", "Создай свой": "Create your", "приватный сейф": "private vault", "Пароли шифруются на устройстве. Мастер-пароль никому не отправляется и не сохраняется.": "Passwords are encrypted on your device. Your master password is never sent or stored.", "Мастер-пароль (минимум 16 символов)": "Master password (at least 16 characters)", "Повтори мастер-пароль": "Repeat master password", "⚠ Если забудешь мастер-пароль, восстановить сейф невозможно. Не используй здесь пароли от других сервисов.": "⚠ If you forget the master password, the vault cannot be recovered. Never reuse another account password.", "Создать зашифрованный сейф": "Create encrypted vault", "СЕЙФ ЗАБЛОКИРОВАН": "VAULT LOCKED", "Твои секреты.": "Your secrets.", "Твои правила.": "Your rules.", "Для доступа к хранилищу введи мастер-пароль. Интернет не нужен.": "Enter your master password to access the vault. No internet needed.", "Мастер-пароль": "Master password", "Разблокировать": "Unlock", "◈ Разблокировать через Face ID / код устройства": "◈ Unlock with Face ID / device passcode", "Забыл пароль? Расшифровать данные без него нельзя.": "Forgot your password? Your data cannot be decrypted without it.", "◆ ЛОКАЛЬНО": "◆ LOCAL", "◆ БЕЗ АНАЛИТИКИ": "◆ NO TRACKING", "ХРАНИЛИЩЕ РАЗБЛОКИРОВАНО": "VAULT UNLOCKED", "Мой сейф": "My vault", "записей": "entries", "Данные расшифрованы только в памяти этого приложения. Они не отправляются на сервер.": "Data is decrypted only in this app's memory. It is not sent to a server.", "＋ Добавить запись": "＋ Add entry", "◈ Аудит": "◈ Audit", "Безопасность и резервирование": "Security & backup", "Локальные данные можно потерять при удалении веб-приложения или очистке его хранилища. Регулярно сохраняй зашифрованную резервную копию.": "Local data can be lost if the app or its storage is removed. Export encrypted backups regularly.", "↓ Экспорт зашифрованной копии": "↓ Export encrypted backup", "◈ Настроить Face ID (экспериментально)": "◈ Set up Face ID (experimental)", "Отключить Face ID": "Disable Face ID", "⇄ Сменить мастер-пароль": "⇄ Change master password", "Очистить буфер обмена": "Clear clipboard", "↑ Импорт зашифрованной копии": "↑ Import encrypted backup", "Настройка Face ID": "Face ID setup", "Сначала подтверди текущий мастер-пароль. Затем отдельной кнопкой запусти создание ключа доступа. Поддержка PRF в Safari не гарантирована.": "First verify your current master password. Then create a passkey using the separate button. PRF support is not guaranteed.", "Текущий мастер-пароль": "Current master password", "Проверить мастер-пароль": "Verify master password", "Создать ключ доступа": "Create passkey", "ЗАЩИФРОВАННАЯ ЗАПИСЬ": "ENCRYPTED ENTRY", "Новая запись": "New entry", "Изменить запись": "Edit entry", "Сервис / приложение": "Service / app", "Логин / e-mail": "Login / email", "Пароль": "Password", "Показать": "Show", "Скрыть": "Hide", "Длина": "Length", "Символы": "Symbols", "✦ Генерировать": "✦ Generate", "Адрес сайта (HTTPS)": "Website URL (HTTPS)", "Заметки (тоже шифруются)": "Notes (also encrypted)", "Копировать логин": "Copy login", "Копировать пароль": "Copy password", "Открыть сайт": "Open website", "Удалить запись": "Delete entry", "Замена пароля здесь не меняет пароль на самом сайте. Сначала измени его в настройках аккаунта, затем сохрани новый здесь.": "Changing a password here does not change it on the website. Update it on the website first.", "Сохранить": "Save", "Отмена": "Cancel", "Проверка резервной копии": "Verify backup", "Введи мастер-пароль": "Enter the master password for the", "импортируемой": "imported", "копии. Нынешний сейф будет заменён только после успешной проверки и твоего подтверждения.": "backup. The current vault will only be replaced after verification and confirmation.", "Мастер-пароль копии": "Backup master password", "Проверить копию": "Verify backup", "Сменить мастер-пароль": "Change master password", "Все записи будут заново зашифрованы с новой случайной солью. Старые резервные копии по-прежнему открываются старым паролем.": "All entries will be re-encrypted with a new random salt. Old backups still use the old password.", "Новый мастер-пароль (от 16 символов)": "New master password (16+ characters)", "Повтори новый пароль": "Repeat new password", "Зашифровать заново": "Re-encrypt", "Продолжить настройку Face ID": "Continue Face ID setup", "Завершить настройку Face ID": "Finish Face ID setup", "Ничего не найдено": "Nothing found", "Здесь появятся твои аккаунты": "Your accounts will appear here", "Попробуй другой запрос.": "Try another search.", "Нажми «Добавить запись», чтобы создать первую зашифрованную запись.": "Tap Add entry to create your first encrypted record.", "Логин не указан": "No login provided", "Копия": "Copy", "Открыть": "Open", "Локальная проверка:": "Local check:", "Повторяющиеся пароли:": "Reused passwords:", "Пароли короче 14 символов:": "Passwords shorter than 14 characters:", "Известные простые пароли:": "Common weak passwords:", "Пустые пароли:": "Empty passwords:", "Это базовая проверка, не доказательство стойкости. Никакие пароли никуда не отправляются.": "This is a basic local check, not proof of password strength. Passwords are never transmitted.", "Длинная уникальная парольная фраза": "A long unique passphrase", "Повтори без ошибок": "Repeat exactly", "Твой мастер-пароль": "Your master password", "Найти сервис или логин...": "Search services or logins...", "Например, Telegram": "For example, Telegram", "Имя пользователя или почта": "Username or email", "Введи или сгенерируй": "Enter or generate", "Дополнительная информация...": "Additional information...", "Закрыть": "Close", "Поиск записей": "Search entries", "Сейф заблокирован.": "Vault locked.", "Сейф открыт.": "Vault unlocked.", "Сейф создан. Сделай резервную копию после добавления записей.": "Vault created. Export a backup after adding entries.", "Сейф не найден. Перезапусти приложение.": "Vault not found. Restart the app.", "Нужно минимум 16 символов для мастер-пароля.": "Master password must be at least 16 characters.", "Мастер-пароли не совпадают.": "Master passwords do not match.", "Пароль подтверждён. Теперь нажми «Создать ключ доступа».": "Password verified. Now tap Create passkey.", "Ключ доступа настроен. Проверь разблокировку после блокировки сейфа.": "Passkey set up. Test unlocking after locking the vault.", "Face ID недоступен. Используй мастер-пароль.": "Face ID unavailable. Use your master password.", "Быстрая разблокировка отключена.": "Quick unlock disabled.", "Запись зашифрована и сохранена на устройстве.": "Entry encrypted and saved on device.", "Запись удалена.": "Entry deleted.", "Буфер обмена очищен.": "Clipboard cleared.", "Не удалось очистить буфер.": "Could not clear clipboard.", "Новый пароль создан. Он ещё не изменён на сайте!": "Password generated. It has not been changed on the website!", "Логин не указан.": "No login provided.", "Пароль не указан.": "No password provided.", "Нужно минимум 16 символов.": "At least 16 characters required.", "Новые мастер-пароли не совпадают.": "New master passwords do not match.", "Мастер-пароль заменён. Скачай новую резервную копию.": "Master password changed. Export a fresh backup.", "Сейф уже создан; перезагрузи приложение.": "Vault already exists; reload the app.", "Укажи название сервиса.": "Enter a service name.", "Укажи пароль или сгенерируй его.": "Enter or generate a password.", "Пароль скопирован. Буфер обмена доступен другим приложениям.": "Password copied. Other apps can access the clipboard.", "Логин скопирован. Буфер обмена доступен другим приложениям.": "Login copied. Other apps can access the clipboard.", "Зашифрованная копия успешно восстановлена.": "Encrypted backup restored.", "Ключ создан. Нажми «Завершить настройку Face ID».": "Passkey created. Tap Finish Face ID setup.", "Safari не вернул секрет PRF. Face ID не включён.": "Browser did not return PRF secret. Face ID not enabled.", "Safari неактивен. Вернись на вкладку и нажми кнопку ещё раз.": "Browser is not focused. Return to the app and try again."};
+let uiLanguage = 'ru';
+let languageMode = 'system';
+const originalText = new WeakMap();
+const originalAttrs = new WeakMap();
+function systemLanguage(){ return (navigator.languages?.[0] || navigator.language || 'en').toLowerCase().startsWith('ru') ? 'ru' : 'en'; }
+function translateText(input){
+  if(uiLanguage==='ru') return input;
+  const match = /^(\s*)([\s\S]*?)(\s*)$/.exec(input);
+  const core = match[2];
+  if (Object.prototype.hasOwnProperty.call(UI_EN,core)) return match[1]+UI_EN[core]+match[3];
+  return input;
+}
+function translateNode(node){
+  if(node.nodeType===3){
+    const parent=node.parentElement;
+    if(!parent || parent.closest('#entryList .entry-title,#entryList .entry-login,#notes,#service,#login,#secret,#siteUrl,#languageSetup,#toast') || parent.closest('script,style')) return;
+    if(!originalText.has(node)) originalText.set(node,node.nodeValue);
+    const source=originalText.get(node), translated=translateText(source);
+    if(node.nodeValue!==translated) node.nodeValue=translated;
+  }else if(node.nodeType===1){
+    if(node.id==='languageSetup' || node.id==='toast' || node.closest('#languageSetup')) return;
+    for(const attr of ['placeholder','aria-label','title']) if(node.hasAttribute(attr)){
+      let values=originalAttrs.get(node);if(!values){values={};originalAttrs.set(node,values);}
+      if(!(attr in values))values[attr]=node.getAttribute(attr);
+      const translated=translateText(values[attr]);if(node.getAttribute(attr)!==translated)node.setAttribute(attr,translated);
+    }
+    for(const child of node.childNodes) translateNode(child);
+  }
+}
+function applyLanguage(lang){
+  uiLanguage = lang==='ru'?'ru':'en';
+  document.documentElement.lang=uiLanguage;
+  document.documentElement.dir='ltr';
+  translateNode(document.body);
+  const btn=$('langSettingsBtn');if(btn)btn.textContent='🌐 '+uiLanguage.toUpperCase();
+  if(vault)renderEntries();
+}
+function showLanguageSetup(){
+  $('languageSetup').classList.remove('hidden');
+  $('gate').classList.add('hidden');$('app').classList.add('hidden');
+  $('languageSelect').value=uiLanguage;
+}
+function initLanguage(){
+  let saved=null;try{saved=JSON.parse(localStorage.getItem(LANG_KEY)||'null');}catch{}
+  languageMode=saved?.mode==='manual'?'manual':'system';
+  applyLanguage(languageMode==='manual'?saved?.language:systemLanguage());
+  $('langSettingsBtn').addEventListener('click',showLanguageSetup);
+  $('changeLanguageBtn').addEventListener('click',showLanguageSetup);
+  $('systemLanguageBtn').addEventListener('click',()=>{languageMode='system';$('languageSelect').classList.add('hidden');$('languageSelectLabel').classList.add('hidden');});
+  $('manualLanguageBtn').addEventListener('click',()=>{languageMode='manual';$('languageSelect').classList.remove('hidden');$('languageSelectLabel').classList.remove('hidden');});
+  $('languageContinueBtn').addEventListener('click',()=>{
+    const lang=languageMode==='system'?systemLanguage():$('languageSelect').value;
+    try{localStorage.setItem(LANG_KEY,JSON.stringify({mode:languageMode,language:lang}));}catch{}
+    $('languageSetup').classList.add('hidden');
+    applyLanguage(lang);
+    if(vault)showApp();else showGate(window.bastionHasVault?'unlock':'create');
+  });
+  if(!saved)showLanguageSetup();
+}
+
 init();
