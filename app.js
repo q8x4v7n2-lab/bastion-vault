@@ -1,6 +1,6 @@
 'use strict';
 
-// BASTION VAULT 0.3: полностью клиентский прототип, не проходил независимый аудит.
+// BASTION VAULT 0.4: полностью клиентский прототип, не проходил независимый аудит.
 // Никаких сетевых запросов, библиотек, серверной синхронизации или аналитики.
 // Весь документ (включая названия сайтов) шифруется одним AES-256-GCM ключом.
 const FORMAT = 'bastion-vault';
@@ -11,7 +11,7 @@ const STORE_NAME = 'encrypted';
 const RECORD_ID = 'vault';
 const AAD = new TextEncoder().encode('BASTION-VAULT/v1');
 const IDLE_LOCK_MS = 5 * 60_000;
-const BACKGROUND_LOCK_MS = 60_000;
+const BACKGROUND_LOCK_MS = 0;
 const MAX_BACKUP_BYTES = 8_000_000;
 const MAX_PASSWORD_LENGTH = 128;
 
@@ -146,7 +146,7 @@ function showApp() {
   bioUi();
 }
 function closeDialogs() {
-  for (const id of ['editor','importDialog','masterDialog']) if ($(id).open) $(id).close();
+  for (const id of ['editor','importDialog','masterDialog','bioDialog']) if ($(id).open) $(id).close();
   $('secret').value = '';
   $('newMaster').value = '';
   $('confirmMaster').value = '';
@@ -157,6 +157,7 @@ function closeDialogs() {
   pendingImport = null;
 }
 function lockVault(showMessage = true) {
+  resetBioSetup();
   closeDialogs();
   $('entryList').replaceChildren();
   $('auditPanel').replaceChildren();
@@ -422,34 +423,104 @@ function bioUi() {
 async function prfAes(secret) {
   return crypto.subtle.importKey('raw', secret, {name:'AES-GCM'}, false, ['encrypt','decrypt']);
 }
-async function setupBiometric() {
+// Face ID setup is intentionally split into user-initiated actions.
+// Safari requires a focused document and an active user gesture for WebAuthn.
+let setupMaster = null;
+let setupCredential = null;
+let setupSalt = null;
+let setupStoredSalt = null;
+function resetBioSetup() {
+  setupMaster = null; setupCredential = null; setupSalt = null; setupStoredSalt = null;
+  $('bioMaster').value = '';
+  $('bioActionBtn').classList.add('hidden');
+  $('bioActionBtn').textContent = 'Продолжить настройку Face ID';
+}
+function bioFocusReady() {
+  if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+    toast('Safari неактивен. Вернись на вкладку и нажми кнопку ещё раз.');
+    return false;
+  }
+  return true;
+}
+function setupBiometric() {
   if (busy || !vault || !bioAvailable()) return;
-  const master = prompt('Для включения Face ID введи текущий мастер-пароль. Он не будет сохранён открытым текстом.');
-  if (master === null) return;
-  busy = true;
+  resetBioSetup();
+  $('bioDialog').showModal();
+}
+async function verifyBioMaster(event) {
+  event.preventDefault();
+  if (busy || !vault) return;
+  const candidate = $('bioMaster').value;
+  $('bioMaster').value = '';
+  setBusy(true, $('bioVerifyBtn'));
   try {
     const stored = await readEncrypted();
-    await decryptEnvelope(stored, master);
-    const challenge = randomBytes(32), salt = randomBytes(32);
-    const credential = await navigator.credentials.create({publicKey:{
-      challenge, rp:{name:'BASTION VAULT'}, user:{id:randomBytes(24),name:'local-vault',displayName:'BASTION VAULT'},
-      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
-      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'preferred'},
-      timeout:60000, attestation:'none', extensions:{prf:{eval:{first:salt}}}
-    }});
-    if (!credential) throw new Error('Ключ доступа не создан.');
-    let output = credential.getClientExtensionResults()?.prf?.results?.first;
-    if (!output) {
-      const assertion = await navigator.credentials.get({publicKey:{challenge:randomBytes(32),allowCredentials:[{type:'public-key',id:credential.rawId}],userVerification:'required',timeout:60000,extensions:{prf:{eval:{first:salt}}}}});
-      output = assertion?.getClientExtensionResults()?.prf?.results?.first;
+    if (!stored) throw new Error('Сейф не найден.');
+    await decryptEnvelope(stored, candidate);
+    setupMaster = candidate;
+    setupStoredSalt = stored.salt;
+    setupSalt = randomBytes(32);
+    $('bioActionBtn').classList.remove('hidden');
+    $('bioActionBtn').textContent = 'Создать ключ доступа';
+    toast('Пароль подтверждён. Теперь нажми «Создать ключ доступа».');
+  } catch(e) {
+    resetBioSetup();
+    toast(e.message || 'Пароль не подошёл.');
+  } finally { setBusy(false, $('bioVerifyBtn')); }
+}
+async function completeBioSetup(prfOutput) {
+  if (!prfOutput || prfOutput.byteLength !== 32) throw new Error('Safari не вернул секрет PRF. Face ID не включён.');
+  const wrappingKey = await prfAes(prfOutput);
+  const iv = randomBytes(12);
+  const encrypted = await crypto.subtle.encrypt({name:'AES-GCM', iv}, wrappingKey, new TextEncoder().encode(setupMaster));
+  localStorage.setItem(BIO_STORAGE, JSON.stringify({
+    credential:base64(new Uint8Array(setupCredential)),salt:base64(setupSalt),
+    iv:base64(iv),data:base64(new Uint8Array(encrypted)),vaultSalt:setupStoredSalt
+  }));
+  resetBioSetup();
+  $('bioDialog').close();
+  bioUi();
+  toast('Ключ доступа настроен. Проверь разблокировку после блокировки сейфа.');
+}
+async function performBioSetup() {
+  if (busy || !vault || !setupMaster || !bioFocusReady()) return;
+  // navigator.credentials.create/get must be invoked before the first await.
+  let operation;
+  try {
+    if (!setupCredential) {
+      operation = navigator.credentials.create({publicKey:{
+        challenge:randomBytes(32),rp:{name:'BASTION VAULT'},
+        user:{id:randomBytes(24),name:'local-vault',displayName:'BASTION VAULT'},
+        pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+        authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'preferred'},
+        timeout:60000,attestation:'none',extensions:{prf:{eval:{first:setupSalt}}}
+      }});
+    } else {
+      operation = navigator.credentials.get({publicKey:{
+        challenge:randomBytes(32),allowCredentials:[{type:'public-key',id:setupCredential}],
+        userVerification:'required',timeout:60000,extensions:{prf:{eval:{first:setupSalt}}}
+      }});
     }
-    if (!output || output.byteLength !== 32) throw new Error('Safari не поддерживает необходимое расширение PRF. Face ID не включён.');
-    const wrapKey = await prfAes(output), iv = randomBytes(12);
-    const encrypted = await crypto.subtle.encrypt({name:'AES-GCM',iv},wrapKey,new TextEncoder().encode(master));
-    localStorage.setItem(BIO_STORAGE,JSON.stringify({credential:base64(new Uint8Array(credential.rawId)),salt:base64(salt),iv:base64(iv),data:base64(new Uint8Array(encrypted)),vaultSalt:stored.salt}));
-    bioUi(); toast('Быстрая разблокировка настроена. Проверь её после закрытия сейфа.');
-  } catch(e) {toast(e.message || 'Не удалось включить Face ID.');}
-  finally {busy=false;}
+  } catch(e) {toast(e.message || 'Не удалось запустить Face ID.');return;}
+  busy = true;
+  $('bioActionBtn').disabled = true;
+  try {
+    const result = await operation;
+    if (!result) throw new Error('Ключ доступа не создан.');
+    if (!setupCredential) setupCredential = result.rawId;
+    const prf = result.getClientExtensionResults()?.prf?.results?.first;
+    if (prf) await completeBioSetup(prf);
+    else if ($('bioActionBtn').textContent === 'Создать ключ доступа') {
+      $('bioActionBtn').textContent = 'Завершить настройку Face ID';
+      toast('Ключ создан. Нажми «Завершить настройку Face ID».');
+    } else throw new Error('WebAuthn PRF не поддерживается. Используй мастер-пароль.');
+  } catch(e) {
+    toast(e.name === 'NotAllowedError' ? 'Операция отменена или запрещена Safari.' : (e.message || 'Face ID недоступен.'));
+  } finally {
+    busy = false;
+    $('bioActionBtn').disabled = false;
+    if (document.hidden && vault) lockVault(false);
+  }
 }
 async function unlockBiometric() {
   if (busy || !bioAvailable()) return;
@@ -473,6 +544,10 @@ async function unlockBiometric() {
 function attachHandlers() {
   $('bioUnlockBtn').addEventListener('click',unlockBiometric);
   $('bioSetupBtn').addEventListener('click',setupBiometric);
+  $('bioVerifyForm').addEventListener('submit',verifyBioMaster);
+  $('bioActionBtn').addEventListener('click',performBioSetup);
+  $('bioCancelBtn').addEventListener('click',()=>{$('bioDialog').close();resetBioSetup();});
+  $('bioDialog').addEventListener('close',resetBioSetup);
   $('bioRemoveBtn').addEventListener('click',()=>{localStorage.removeItem(BIO_STORAGE);bioUi();toast('Быстрая разблокировка отключена.');});
   $('createForm').addEventListener('submit',onCreate);
   $('unlockForm').addEventListener('submit',onUnlock);
@@ -521,16 +596,17 @@ function attachHandlers() {
   document.addEventListener('pointerdown',()=>lastActivity=Date.now(),{passive:true});
   document.addEventListener('keydown',()=>lastActivity=Date.now(),{passive:true});
   document.addEventListener('visibilitychange',()=>{
-    if(document.hidden)hiddenAt=Date.now();
-    else if(vault && hiddenAt && Date.now()-hiddenAt>=BACKGROUND_LOCK_MS)lockVault();
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      if (vault && !busy) lockVault(false);
+    } else hiddenAt = 0;
   });
-  window.addEventListener('pagehide',()=>{if(vault)lockVault(false);});
+  window.addEventListener('pagehide',()=>{resetBioSetup();if(vault)lockVault(false);});
   setInterval(()=>{if(vault && !document.hidden && Date.now()-lastActivity>=IDLE_LOCK_MS)lockVault();},10_000);
 }
 async function init() {
   attachHandlers();
-  const versionLabels = [...document.querySelectorAll('body *')].filter(el => el.children.length === 0 && el.textContent?.includes('экспериментальная версия 0.1'));
-  for (const el of versionLabels) el.textContent = el.textContent.replace('версия 0.1', 'версия 0.3');
+  // Version label is authored directly in index.html.
   if (!window.isSecureContext || !crypto?.subtle || !window.indexedDB) {
     $('gate').classList.add('hidden');$('unsupported').classList.remove('hidden');return;
   }

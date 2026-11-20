@@ -73,9 +73,22 @@
       </section>
     </section>
 
-    <section class="footer-tools"><label class="file-button" for="importFile">↑ Импорт зашифрованной копии</label><input id="importFile" class="visually-hidden" type="file" accept=".json,.bastion,application/json"><div class="footer-caption">BASTION VAULT • локальная экспериментальная версия 0.1</div></section>
+    <section class="footer-tools"><label class="file-button" for="importFile">↑ Импорт зашифрованной копии</label><input id="importFile" class="visually-hidden" type="file" accept=".json,.bastion,application/json"><div class="footer-caption">BASTION VAULT • локальная экспериментальная версия 0.4</div></section>
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   </main>
+
+  <dialog id="bioDialog" class="modal">
+    <div class="modal-inner">
+      <div class="modal-header"><h2>Настройка Face ID</h2><button id="bioCancelBtn" class="icon-button" type="button" aria-label="Закрыть">✕</button></div>
+      <p>Сначала подтверди текущий мастер-пароль. Затем отдельной кнопкой запусти создание ключа доступа. Поддержка PRF в Safari не гарантирована.</p>
+      <form id="bioVerifyForm" class="stack">
+        <label for="bioMaster">Текущий мастер-пароль</label>
+        <input id="bioMaster" type="password" autocomplete="off" required>
+        <button id="bioVerifyBtn" class="btn secondary" type="submit">Проверить мастер-пароль</button>
+      </form>
+      <button id="bioActionBtn" class="btn primary full hidden" type="button">Создать ключ доступа</button>
+    </div>
+  </dialog>
 
   <dialog id="editor" class="modal"><form id="editorForm" class="modal-inner" method="dialog" novalidate>
     <div class="modal-header"><div><div class="eyebrow">ЗАЩИФРОВАННАЯ ЗАПИСЬ</div><h2 id="editorTitle">Новая запись</h2></div><button id="closeEditor" class="icon-button" type="button" aria-label="Закрыть">✕</button></div>
