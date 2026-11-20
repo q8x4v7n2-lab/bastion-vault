@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090e0d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BASTION">
+  <meta name="description" content="Локальный зашифрованный сейф паролей без облачной синхронизации.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'">
+  <meta name="referrer" content="no-referrer">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="icon" type="image/png" href="./icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./app.js"></script>
+  <title>BASTION VAULT — приватный сейф</title>
+</head>
+<body>
+  <div class="ambient"></div>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><div class="logo" aria-hidden="true">⬡</div><div><div class="brand-name">BASTION <span>VAULT</span></div><div class="brand-sub">PRIVATE BY DESIGN</div></div></div>
+      <button id="lockBtn" class="btn small ghost hidden" type="button">🔒 Закрыть</button>
+    </header>
+
+    <section id="unsupported" class="panel hidden" aria-live="polite">
+      <h1>Нужен защищённый браузер</h1><p>Для шифрования требуются HTTPS, Web Crypto и локальная база IndexedDB. Открой приложение через HTTPS в Safari.</p>
+    </section>
+
+    <section id="gate" class="gate">
+      <div class="hero-shield" aria-hidden="true">⬡<span>✦</span></div>
+      <div id="createView" class="hidden">
+        <div class="eyebrow">ПЕРВЫЙ ЗАПУСК</div><h1>Создай свой<br><em>приватный сейф</em></h1>
+        <p class="intro">Пароли шифруются на устройстве. Мастер-пароль никому не отправляется и не сохраняется.</p>
+        <form id="createForm" class="stack">
+          <label for="newMaster">Мастер-пароль (минимум 16 символов)</label>
+          <input id="newMaster" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required minlength="16" placeholder="Длинная уникальная парольная фраза">
+          <label for="confirmMaster">Повтори мастер-пароль</label>
+          <input id="confirmMaster" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required minlength="16" placeholder="Повтори без ошибок">
+          <p class="warning">⚠ Если забудешь мастер-пароль, восстановить сейф невозможно. Не используй здесь пароли от других сервисов.</p>
+          <button id="createBtn" class="btn primary full" type="submit">Создать зашифрованный сейф</button>
+        </form>
+      </div>
+      <div id="unlockView" class="hidden">
+        <div class="eyebrow">СЕЙФ ЗАБЛОКИРОВАН</div><h1>Твои секреты.<br><em>Твои правила.</em></h1>
+        <p class="intro">Для доступа к хранилищу введи мастер-пароль. Интернет не нужен.</p>
+        <form id="unlockForm" class="stack">
+          <label for="unlockMaster">Мастер-пароль</label>
+          <input id="unlockMaster" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required placeholder="Твой мастер-пароль">
+          <button id="unlockBtn" class="btn primary full" type="submit">Разблокировать</button>
+        </form>
+        <p class="hint">Забыл пароль? Расшифровать данные без него нельзя.</p>
+      </div>
+      <div class="security-strip"><span>◆ AES-256-GCM</span><span>◆ ЛОКАЛЬНО</span><span>◆ БЕЗ АНАЛИТИКИ</span></div>
+    </section>
+
+    <section id="app" class="hidden">
+      <div class="welcome"><div><div class="eyebrow">ХРАНИЛИЩЕ РАЗБЛОКИРОВАНО</div><h1>Мой сейф<span class="accent">.</span></h1></div><div class="count-pill"><span id="count">0</span><small>записей</small></div></div>
+      <div class="privacy-note"><span class="dot"></span> Данные расшифрованы только в памяти этого приложения. Они не отправляются на сервер.</div>
+      <div class="search-wrap"><span aria-hidden="true">⌕</span><input type="search" id="search" placeholder="Найти сервис или логин..." aria-label="Поиск записей" autocomplete="off"></div>
+      <div class="toolbar"><button id="addBtn" class="btn primary" type="button">＋ Добавить запись</button><button id="auditBtn" class="btn secondary" type="button">◈ Аудит</button></div>
+      <div id="auditPanel" class="audit hidden" aria-live="polite"></div>
+      <div id="entryList" class="entries" aria-live="polite"></div>
+      <section class="settings panel">
+        <h2>Безопасность и резервирование</h2>
+        <p>Локальные данные можно потерять при удалении веб-приложения или очистке его хранилища. Регулярно сохраняй зашифрованную резервную копию.</p>
+        <div class="setting-actions"><button id="exportBtn" class="btn secondary" type="button">↓ Экспорт зашифрованной копии</button><button id="changeMasterBtn" class="btn secondary" type="button">⇄ Сменить мастер-пароль</button><button id="clearClipBtn" class="btn ghost" type="button">Очистить буфер обмена</button></div>
+      </section>
+    </section>
+
+    <section class="footer-tools"><label class="file-button" for="importFile">↑ Импорт зашифрованной копии</label><input id="importFile" class="visually-hidden" type="file" accept=".json,.bastion,application/json"><div class="footer-caption">BASTION VAULT • локальная экспериментальная версия 0.1</div></section>
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </main>
+
+  <dialog id="editor" class="modal"><form id="editorForm" class="modal-inner" method="dialog" novalidate>
+    <div class="modal-header"><div><div class="eyebrow">ЗАЩИФРОВАННАЯ ЗАПИСЬ</div><h2 id="editorTitle">Новая запись</h2></div><button id="closeEditor" class="icon-button" type="button" aria-label="Закрыть">✕</button></div>
+    <label for="service">Сервис / приложение</label><input id="service" maxlength="100" required placeholder="Например, Telegram" autocomplete="off">
+    <label for="login">Логин / e-mail</label><input id="login" maxlength="200" placeholder="Имя пользователя или почта" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label for="secret">Пароль</label><div class="password-row"><input id="secret" type="password" maxlength="1024" placeholder="Введи или сгенерируй" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="showSecret" class="btn secondary small" type="button">Показать</button></div>
+    <div class="genrow"><label class="small-label" for="length">Длина</label><select id="length"><option value="16">16</option><option value="20">20</option><option value="24" selected>24</option><option value="32">32</option><option value="48">48</option><option value="64">64</option></select><label class="small-label checklabel"><input id="symbols" type="checkbox" checked> Символы</label><button id="generateBtn" class="btn secondary small" type="button">✦ Генерировать</button></div>
+    <label for="siteUrl">Адрес сайта (HTTPS)</label><input id="siteUrl" type="url" maxlength="1000" inputmode="url" placeholder="https://example.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label for="notes">Заметки (тоже шифруются)</label><textarea id="notes" rows="3" maxlength="3000" placeholder="Дополнительная информация..."></textarea>
+    <div class="quick-actions"><button id="copyLogin" class="btn secondary small" type="button">Копировать логин</button><button id="copyPassword" class="btn secondary small" type="button">Копировать пароль</button><button id="openWebsite" class="btn secondary small" type="button">Открыть сайт</button><button id="deleteEntry" class="btn danger small hidden" type="button">Удалить запись</button></div>
+    <p class="warning tiny">Замена пароля здесь не меняет пароль на самом сайте. Сначала измени его в настройках аккаунта, затем сохрани новый здесь.</p>
+    <div class="form-buttons"><button class="btn primary" type="submit" id="saveEntry">Сохранить</button><button class="btn ghost" type="button" id="cancelEditor">Отмена</button></div>
+  </form></dialog>
+
+  <dialog id="importDialog" class="modal"><form id="importForm" class="modal-inner" method="dialog">
+    <div class="modal-header"><h2>Проверка резервной копии</h2><button id="cancelImport" class="icon-button" type="button" aria-label="Закрыть">✕</button></div>
+    <p>Введи мастер-пароль <strong>импортируемой</strong> копии. Нынешний сейф будет заменён только после успешной проверки и твоего подтверждения.</p>
+    <label for="importMaster">Мастер-пароль копии</label><input id="importMaster" type="password" autocomplete="off" required>
+    <div class="form-buttons"><button id="confirmImport" class="btn primary" type="submit">Проверить копию</button><button id="dismissImport" class="btn ghost" type="button">Отмена</button></div>
+  </form></dialog>
+
+  <dialog id="masterDialog" class="modal"><form id="masterForm" class="modal-inner" method="dialog">
+    <div class="modal-header"><h2>Сменить мастер-пароль</h2><button id="cancelMaster" class="icon-button" type="button" aria-label="Закрыть">✕</button></div>
+    <p>Все записи будут заново зашифрованы с новой случайной солью. Старые резервные копии по-прежнему открываются старым паролем.</p>
+    <label for="masterNew">Новый мастер-пароль (от 16 символов)</label><input id="masterNew" type="password" autocomplete="off" required minlength="16">
+    <label for="masterConfirm">Повтори новый пароль</label><input id="masterConfirm" type="password" autocomplete="off" required minlength="16">
+    <div class="form-buttons"><button id="confirmMasterChange" class="btn primary" type="submit">Зашифровать заново</button><button id="dismissMaster" class="btn ghost" type="button">Отмена</button></div>
+  </form></dialog>
+</body>
+</html>
