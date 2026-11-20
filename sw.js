@@ -1,16 +1,45 @@
 'use strict';
-const CACHE='bastion-shell-v01';
-const SHELL=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
-self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
+// BASTION VAULT 0.6 PRO. Cache only this app's public static shell; never touch IndexedDB/localStorage.
+const CACHE = 'bastion-shell-v060';
+const ROOT = new URL('./', self.registration.scope);
+const SHELL = ['./index.html', './styles.css', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+self.addEventListener('install', event => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    await Promise.all(SHELL.map(async path => {
+      const url = new URL(path, ROOT);
+      const response = await fetch(new Request(url, {cache:'reload'}));
+      if (!response.ok) throw new Error('Shell update failed: ' + path);
+      await cache.put(url, response);
+    }));
+    await self.skipWaiting();
+  })());
 });
-self.addEventListener('activate',event=>{
-  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names.filter(name => name.startsWith('bastion-shell-') && name !== CACHE).map(name => caches.delete(name)));
+    await self.clients.claim();
+  })());
 });
-self.addEventListener('fetch',event=>{
-  const req=event.request;
-  if(req.method!=='GET')return;
-  const u=new URL(req.url);
-  if(u.origin!==self.location.origin)return;
-  event.respondWith(caches.match(req).then(cached=>cached||fetch(req)));
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== ROOT.origin || !url.pathname.startsWith(ROOT.pathname)) return;
+  // Network-first for HTML/JS/CSS: newly published updates take priority over old cache.
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    try {
+      const response = await fetch(new Request(req, {cache:'no-store'}));
+      if (response.ok && response.type === 'basic') {
+        await cache.put(req, response.clone());
+      }
+      return response;
+    } catch (error) {
+      const cached = await cache.match(req, {ignoreSearch:true});
+      if (cached) return cached;
+      throw error;
+    }
+  })());
 });
