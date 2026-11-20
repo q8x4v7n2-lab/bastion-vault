@@ -1,6 +1,6 @@
 'use strict';
 
-// BASTION VAULT 0.1: полностью клиентский прототип, не проходил независимый аудит.
+// BASTION VAULT 0.3: полностью клиентский прототип, не проходил независимый аудит.
 // Никаких сетевых запросов, библиотек, серверной синхронизации или аналитики.
 // Весь документ (включая названия сайтов) шифруется одним AES-256-GCM ключом.
 const FORMAT = 'bastion-vault';
@@ -12,6 +12,8 @@ const RECORD_ID = 'vault';
 const AAD = new TextEncoder().encode('BASTION-VAULT/v1');
 const IDLE_LOCK_MS = 5 * 60_000;
 const BACKGROUND_LOCK_MS = 60_000;
+const MAX_BACKUP_BYTES = 8_000_000;
+const MAX_PASSWORD_LENGTH = 128;
 
 const $ = (id) => document.getElementById(id);
 let db;
@@ -52,18 +54,23 @@ function validEnvelope(value) {
   if (!value || typeof value !== 'object' || value.format !== FORMAT || value.version !== VERSION ||
       value.iterations !== ITERATIONS || typeof value.salt !== 'string' ||
       typeof value.iv !== 'string' || typeof value.data !== 'string' ||
-      value.data.length > 8_000_000 || value.data.length < 25) return false;
+      value.data.length > MAX_BACKUP_BYTES || value.data.length < 25) return false;
   try { return bytesFromBase64(value.salt).length === 16 && bytesFromBase64(value.iv).length === 12 && bytesFromBase64(value.data).length >= 17; }
   catch { return false; }
 }
 function validVault(value) {
   if (!value || value.schema !== 1 || !Array.isArray(value.entries) || value.entries.length > 20_000) return false;
-  return value.entries.every(e => e && typeof e.id === 'string' && e.id.length <= 70 &&
+  const ids = new Set();
+  return value.entries.every(e => {
+    if (!e || typeof e.id !== 'string' || ids.has(e.id)) return false;
+    ids.add(e.id);
+    return e && typeof e.id === 'string' && e.id.length <= 70 &&
     typeof e.service === 'string' && e.service.length <= 100 &&
     typeof e.login === 'string' && e.login.length <= 200 &&
     typeof e.password === 'string' && e.password.length <= 1024 &&
     typeof e.url === 'string' && e.url.length <= 1000 &&
-    typeof e.notes === 'string' && e.notes.length <= 3000);
+    typeof e.notes === 'string' && e.notes.length <= 3000;
+  });
 }
 
 function openDB() {
@@ -136,6 +143,7 @@ function showApp() {
   $('search').value = '';
   lastActivity = Date.now();
   renderEntries();
+  bioUi();
 }
 function closeDialogs() {
   for (const id of ['editor','importDialog','masterDialog']) if ($(id).open) $(id).close();
@@ -159,6 +167,7 @@ function lockVault(showMessage = true) {
   editingId = null;
   envelope = null;
   showGate('unlock');
+  bioUi();
   if (showMessage) toast('Сейф заблокирован.');
 }
 function make(tag, className = '', value = '') {
@@ -225,6 +234,9 @@ function randomIndex(max) {
   return x[0] % max;
 }
 function generatePassword(len, allowSymbols) {
+  if (!Number.isInteger(len) || len < 12 || len > MAX_PASSWORD_LENGTH) {
+    throw new Error('Длина пароля должна быть от 12 до 128 символов.');
+  }
   const groups = ['abcdefghijkmnopqrstuvwxyz','ABCDEFGHJKLMNPQRSTUVWXYZ','23456789'];
   if (allowSymbols) groups.push('!@#$%^&*()-_=+[]{}?');
   const all = groups.join('');
@@ -256,12 +268,17 @@ function renderAudit() {
   for (const e of vault.entries) if (e.password) counts.set(e.password,(counts.get(e.password)||0)+1);
   const reused = vault.entries.filter(e => e.password && counts.get(e.password)>1).length;
   const short = vault.entries.filter(e => e.password.length < 14).length;
+  const empty = vault.entries.filter(e => !e.password).length;
+  const common = new Set(['password','password123','123456','12345678','qwerty','qwerty123','admin','111111','letmein']);
+  const obvious = vault.entries.filter(e => common.has(e.password.toLowerCase())).length;
   const line1 = make('div','', 'Локальная проверка: ');
   line1.append(make('strong','',String(vault.entries.length) + ' записей'));
   const line2 = make('div', reused ? 'bad':'', `Повторяющиеся пароли: ${reused} записей`);
   const line3 = make('div', short ? 'bad':'', `Пароли короче 14 символов: ${short}`);
   const hint = make('div','', 'Это базовая проверка, не доказательство стойкости. Никакие пароли никуда не отправляются.');
-  p.append(line1,line2,line3,hint);
+  const line4 = make('div', obvious ? 'bad':'', `Известные простые пароли: ${obvious}`);
+  const line5 = make('div', empty ? 'bad':'', `Пустые пароли: ${empty}`);
+  p.append(line1,line2,line3,line4,line5,hint);
   p.classList.toggle('hidden');
 }
 async function onCreate(event) {
@@ -306,8 +323,10 @@ async function onSaveEntry(event) {
   const notes = $('notes').value;
   if (!service) return toast('Укажи название сервиса.');
   if (!password) return toast('Укажи пароль или сгенерируй его.');
+  if (password.length > 1024 || service.length > 100 || login.length > 200 || notes.length > 3000)
+    return toast('Одно из полей превышает допустимую длину.');
   let url;
-  try { url = ensureHttps($('siteUrl').value); }
+  try { url = ensureHttps($('siteUrl').value); if (url.length > 1000) throw new Error('Ссылка слишком длинная.'); }
   catch(e) {return toast(e.message);}
   const now = new Date().toISOString();
   const old = editingId ? vault.entries.find(x => x.id === editingId) : null;
@@ -347,7 +366,7 @@ async function prepareImport(event) {
   const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
-  if (file.size > 8_000_000) return toast('Файл слишком большой для этой версии.');
+  if (file.size > MAX_BACKUP_BYTES) return toast('Файл слишком большой для этой версии.');
   try {
     const record = JSON.parse(await file.text());
     if (!validEnvelope(record)) throw new Error('Это не поддерживаемая копия BASTION VAULT.');
@@ -383,13 +402,78 @@ async function onChangeMaster(event) {
     const nextKey=await deriveKey(first,salt);
     const nextRecord=await encryptVault(vault,nextKey,salt);
     await writeEncrypted(nextRecord);
-    key=nextKey;envelope=nextRecord;
+    key=nextKey;envelope=nextRecord;localStorage.removeItem(BIO_STORAGE);bioUi();
     $('masterDialog').close();$('masterNew').value='';$('masterConfirm').value='';
     toast('Мастер-пароль заменён. Скачай новую резервную копию.');
   }catch(e){toast(e.message||'Не удалось сменить пароль.');}
   finally{setBusy(false,$('confirmMasterChange'));}
 }
+
+// Optional local passkey PRF unlock. Requires browser support; never replaces the master password.
+const BIO_STORAGE = 'bastion-vault-prf-v03';
+function bioConfig() { try { return JSON.parse(localStorage.getItem(BIO_STORAGE) || 'null'); } catch { return null; } }
+function bioAvailable() { return !!(window.PublicKeyCredential && navigator.credentials && window.isSecureContext); }
+function bioUi() {
+  const has = !!bioConfig();
+  $('bioUnlockBtn').classList.toggle('hidden', !has || !bioAvailable());
+  $('bioSetupBtn').classList.toggle('hidden', !bioAvailable());
+  $('bioRemoveBtn').classList.toggle('hidden', !has);
+}
+async function prfAes(secret) {
+  return crypto.subtle.importKey('raw', secret, {name:'AES-GCM'}, false, ['encrypt','decrypt']);
+}
+async function setupBiometric() {
+  if (busy || !vault || !bioAvailable()) return;
+  const master = prompt('Для включения Face ID введи текущий мастер-пароль. Он не будет сохранён открытым текстом.');
+  if (master === null) return;
+  busy = true;
+  try {
+    const stored = await readEncrypted();
+    await decryptEnvelope(stored, master);
+    const challenge = randomBytes(32), salt = randomBytes(32);
+    const credential = await navigator.credentials.create({publicKey:{
+      challenge, rp:{name:'BASTION VAULT'}, user:{id:randomBytes(24),name:'local-vault',displayName:'BASTION VAULT'},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'preferred'},
+      timeout:60000, attestation:'none', extensions:{prf:{eval:{first:salt}}}
+    }});
+    if (!credential) throw new Error('Ключ доступа не создан.');
+    let output = credential.getClientExtensionResults()?.prf?.results?.first;
+    if (!output) {
+      const assertion = await navigator.credentials.get({publicKey:{challenge:randomBytes(32),allowCredentials:[{type:'public-key',id:credential.rawId}],userVerification:'required',timeout:60000,extensions:{prf:{eval:{first:salt}}}}});
+      output = assertion?.getClientExtensionResults()?.prf?.results?.first;
+    }
+    if (!output || output.byteLength !== 32) throw new Error('Safari не поддерживает необходимое расширение PRF. Face ID не включён.');
+    const wrapKey = await prfAes(output), iv = randomBytes(12);
+    const encrypted = await crypto.subtle.encrypt({name:'AES-GCM',iv},wrapKey,new TextEncoder().encode(master));
+    localStorage.setItem(BIO_STORAGE,JSON.stringify({credential:base64(new Uint8Array(credential.rawId)),salt:base64(salt),iv:base64(iv),data:base64(new Uint8Array(encrypted)),vaultSalt:stored.salt}));
+    bioUi(); toast('Быстрая разблокировка настроена. Проверь её после закрытия сейфа.');
+  } catch(e) {toast(e.message || 'Не удалось включить Face ID.');}
+  finally {busy=false;}
+}
+async function unlockBiometric() {
+  if (busy || !bioAvailable()) return;
+  const config=bioConfig(); if (!config) return;
+  busy=true; $('bioUnlockBtn').disabled=true;
+  try {
+    const stored=await readEncrypted();
+    if (!stored || stored.salt!==config.vaultSalt) throw new Error('Мастер-пароль или сейф изменён. Используй мастер-пароль и настрой Face ID заново.');
+    const assertion=await navigator.credentials.get({publicKey:{challenge:randomBytes(32),allowCredentials:[{type:'public-key',id:bytesFromBase64(config.credential)}],userVerification:'required',timeout:60000,extensions:{prf:{eval:{first:bytesFromBase64(config.salt)}}}}});
+    const secret=assertion?.getClientExtensionResults()?.prf?.results?.first;
+    if (!secret) throw new Error('Safari не вернул ключ PRF. Разблокируй мастер-паролем.');
+    const wrappingKey=await prfAes(secret);
+    const raw=await crypto.subtle.decrypt({name:'AES-GCM',iv:bytesFromBase64(config.iv)},wrappingKey,bytesFromBase64(config.data));
+    const master=new TextDecoder().decode(raw);
+    const result=await decryptEnvelope(stored,master);
+    vault=result.decoded;key=result.newKey;envelope=stored;showApp();toast('Сейф открыт.');
+  } catch(e) {toast(e.message || 'Face ID недоступен. Используй мастер-пароль.');}
+  finally {busy=false;$('bioUnlockBtn').disabled=false;}
+}
+
 function attachHandlers() {
+  $('bioUnlockBtn').addEventListener('click',unlockBiometric);
+  $('bioSetupBtn').addEventListener('click',setupBiometric);
+  $('bioRemoveBtn').addEventListener('click',()=>{localStorage.removeItem(BIO_STORAGE);bioUi();toast('Быстрая разблокировка отключена.');});
   $('createForm').addEventListener('submit',onCreate);
   $('unlockForm').addEventListener('submit',onUnlock);
   $('editorForm').addEventListener('submit',onSaveEntry);
@@ -421,9 +505,11 @@ function attachHandlers() {
   });
   $('deleteEntry').addEventListener('click',deleteEditingEntry);
   $('generateBtn').addEventListener('click',()=>{
-    $('secret').value=generatePassword(Number($('length').value),$('symbols').checked);
-    $('secret').type='password';$('showSecret').textContent='Показать';
-    toast('Новый пароль создан. Он ещё не изменён на сайте!');
+    try {
+      $('secret').value=generatePassword(Number($('length').value),$('symbols').checked);
+      $('secret').type='password';$('showSecret').textContent='Показать';
+      toast('Новый пароль создан. Он ещё не изменён на сайте!');
+    } catch (e) { toast(e.message); }
   });
   for(const id of ['closeEditor','cancelEditor']) $(id).addEventListener('click',()=>{$('editor').close();$('secret').value='';});
   for(const id of ['cancelImport','dismissImport']) $(id).addEventListener('click',()=>{pendingImport=null;$('importDialog').close();$('importMaster').value='';});
@@ -443,6 +529,8 @@ function attachHandlers() {
 }
 async function init() {
   attachHandlers();
+  const versionLabels = [...document.querySelectorAll('body *')].filter(el => el.children.length === 0 && el.textContent?.includes('экспериментальная версия 0.1'));
+  for (const el of versionLabels) el.textContent = el.textContent.replace('версия 0.1', 'версия 0.3');
   if (!window.isSecureContext || !crypto?.subtle || !window.indexedDB) {
     $('gate').classList.add('hidden');$('unsupported').classList.remove('hidden');return;
   }
@@ -450,6 +538,7 @@ async function init() {
     db = await openDB();
     const current = await readEncrypted();
     showGate(current ? 'unlock' : 'create');
+    bioUi();
   } catch(e) {
     $('gate').classList.add('hidden');
     $('unsupported').classList.remove('hidden');

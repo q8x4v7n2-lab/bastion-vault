@@ -51,6 +51,7 @@
           <input id="unlockMaster" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required placeholder="Твой мастер-пароль">
           <button id="unlockBtn" class="btn primary full" type="submit">Разблокировать</button>
         </form>
+        <button id="bioUnlockBtn" class="btn secondary full hidden" type="button">◈ Разблокировать через Face ID / код устройства</button>
         <p class="hint">Забыл пароль? Расшифровать данные без него нельзя.</p>
       </div>
       <div class="security-strip"><span>◆ AES-256-GCM</span><span>◆ ЛОКАЛЬНО</span><span>◆ БЕЗ АНАЛИТИКИ</span></div>
@@ -66,7 +67,9 @@
       <section class="settings panel">
         <h2>Безопасность и резервирование</h2>
         <p>Локальные данные можно потерять при удалении веб-приложения или очистке его хранилища. Регулярно сохраняй зашифрованную резервную копию.</p>
-        <div class="setting-actions"><button id="exportBtn" class="btn secondary" type="button">↓ Экспорт зашифрованной копии</button><button id="changeMasterBtn" class="btn secondary" type="button">⇄ Сменить мастер-пароль</button><button id="clearClipBtn" class="btn ghost" type="button">Очистить буфер обмена</button></div>
+        <div class="setting-actions"><button id="exportBtn" class="btn secondary" type="button">↓ Экспорт зашифрованной копии</button><button id="bioSetupBtn" class="btn secondary hidden" type="button">◈ Настроить Face ID (экспериментально)</button>
+      <button id="bioRemoveBtn" class="btn secondary hidden" type="button">Отключить Face ID</button>
+      <button id="changeMasterBtn" class="btn secondary" type="button">⇄ Сменить мастер-пароль</button><button id="clearClipBtn" class="btn ghost" type="button">Очистить буфер обмена</button></div>
       </section>
     </section>
 
