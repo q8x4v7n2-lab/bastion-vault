@@ -1,8 +1,8 @@
 'use strict';
-// BASTION VAULT 0.7 PRO. Cache only this app's public static shell; never touch IndexedDB/localStorage.
-const CACHE = 'bastion-shell-v070';
+// BASTION VAULT 0.8 TITAN. Cache only this app's public static shell; never touch IndexedDB/localStorage.
+const CACHE = 'bastion-shell-v080';
 const ROOT = new URL('./', self.registration.scope);
-const SHELL = ['./index.html', './styles.css', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+const SHELL = ['./index.html', './styles.css?v=080', './qr-clean.js?v=080', './app.js?v=080', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);

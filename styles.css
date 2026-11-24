@@ -68,3 +68,6 @@ body{background:radial-gradient(ellipse 110% 32% at 50% -12%,#145b3b55,transpare
 .idle-lock-setting select{width:100%;margin-top:5px}
 .entry-buttons{flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:420px){.entry{gap:8px}.entry-buttons{max-width:150px}.entry-buttons .btn{font-size:11px;padding:7px 8px}}
+
+/* TITAN */
+.bottom-nav{grid-template-columns:repeat(6,minmax(0,1fr));gap:2px}.nav-item{font-size:10px;padding:6px 1px}#totpList,#connectList{margin-top:16px}.titan-card{display:grid;gap:10px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow-wrap:anywhere}.titan-code{font:700 32px ui-monospace,monospace;letter-spacing:3px;color:var(--green)}.titan-muted{font-size:12px;color:var(--muted)}.titan-actions{display:flex;gap:8px;flex-wrap:wrap}.pilot-inline{border:2px solid var(--green);padding:12px;border-radius:12px;color:var(--text);font-size:14px}.pilot-highlight{outline:3px solid var(--green)!important;outline-offset:3px;box-shadow:0 0 0 7px #00e5c333!important}#qrVideo{width:100%;max-height:240px;border-radius:12px}#pilotLink{text-decoration:none;text-align:center}.titan-time{width:100%;accent-color:var(--green)}

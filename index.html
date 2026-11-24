@@ -9,13 +9,14 @@
 <meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"/>
 <meta content="BASTION" name="apple-mobile-web-app-title"/>
 <meta content="Локальный зашифрованный сейф паролей без облачной синхронизации." name="description"/>
-<meta content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'" http-equiv="Content-Security-Policy"/>
+<meta content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; media-src 'self' blob:" http-equiv="Content-Security-Policy"/>
 <meta content="no-referrer" name="referrer"/>
 <link href="./manifest.webmanifest" rel="manifest"/>
 <link href="./icon-192.png" rel="apple-touch-icon"/>
 <link href="./icon-192.png" rel="icon" type="image/png"/>
-<link href="./styles.css?v=070" rel="stylesheet"/>
-<script defer="" src="./app.js?v=070"></script>
+<link href="./styles.css?v=080" rel="stylesheet"/>
+<script defer src="./qr-clean.js?v=080"></script>
+<script defer="" src="./app.js?v=080"></script>
 <title>BASTION VAULT — приватный сейф</title>
 </head>
 <body>
@@ -50,7 +51,7 @@
 <input autocapitalize="off" autocomplete="off" id="unlockMaster" placeholder="Твой мастер-пароль" required="" spellcheck="false" type="password"/>
 <button class="btn primary full" id="unlockBtn" type="submit">Разблокировать</button>
 </form>
-<button class="btn secondary full hidden" id="bioUnlockBtn" type="button">◈ Разблокировать через Face ID / код устройства</button>
+<button class="btn secondary full hidden" id="bioUnlockBtn" type="button">◈ Разблокировать через Face ID / Touch ID / код устройства</button>
 <p class="hint">Забыл пароль? Расшифровать данные без него нельзя.</p>
 </div>
 <div class="security-strip"><span>◆ AES-256-GCM</span><span>◆ ЛОКАЛЬНО</span><span>◆ БЕЗ АНАЛИТИКИ</span></div>
@@ -58,8 +59,8 @@
 <section class="hidden" id="app"><section class="tab-page" id="vaultPage"><div class="welcome"><div><div class="eyebrow">ВСЕ ПАРОЛИ В ОДНОМ МЕСТЕ</div><h1>Мой сейф</h1></div><div class="count-pill"><span id="count">0</span><small>записей</small></div></div><div class="privacy-note">🔐 Ваши записи зашифрованы и хранятся на этом устройстве.</div><div class="search-wrap"><span aria-hidden="true">⌕</span><input aria-label="Поиск записей" autocomplete="off" id="search" placeholder="Найти сервис или логин..." type="search"/></div><label class="favorites-filter"><input type="checkbox" id="favoritesOnly"/> <span>★ Только избранное</span></label><div class="toolbar"><button class="btn primary" id="addBtn" type="button">＋ Добавить пароль</button><button class="btn secondary" id="auditBtn" type="button">◇ Проверить пароли</button></div><div aria-live="polite" class="entries" id="entryList"></div></section><section class="tab-page hidden" id="generatorPage"><h2>Генератор паролей</h2><p>Создавайте уникальные пароли. Результат не сохраняется, пока вы не добавите его в сейф.</p><div class="generator-box"><input aria-label="Сгенерированный пароль" autocomplete="off" id="generatedOutput" readonly="" type="text"/><button class="btn secondary" id="copyGenerated" type="button">Копировать</button></div><label for="generatedLength">Длина: <output id="generatedLengthLabel">24</output></label><input id="generatedLength" max="64" min="16" type="range" value="24"/><label class="checklabel"><input checked="" id="generatedSymbols" type="checkbox"/> Специальные символы</label><button class="btn primary full" id="generateStandalone" type="button">⚡ Создать пароль</button></section><section class="tab-page hidden" id="auditPage"><h2>Проверка безопасности</h2><p>Локальная проверка слабых и повторяющихся паролей. Без отправки данных в интернет.</p><div aria-live="polite" class="audit" id="auditPanel"></div></section><section class="settings panel tab-page hidden" id="settingsPage">
 <h2>Настройки</h2>
 <p>Локальные данные можно потерять при удалении веб-приложения или очистке его хранилища. Регулярно сохраняй зашифрованную резервную копию.</p>
-<p class="bio-status" id="bioStatus" role="status">Проверяем доступность Face ID…</p><div class="idle-lock-setting"><label for="idleLockSelect">Автоблокировка</label><p>Когда блокировать сейф при бездействии? При сворачивании приложение блокируется всегда.</p><select id="idleLockSelect"><option value="0">Сразу при сворачивании</option><option value="1">Через 1 минуту</option><option value="5" selected>Через 5 минут</option><option value="15">Через 15 минут</option></select></div><div class="setting-actions"><button class="btn secondary" id="exportBtn" type="button">↓ Экспорт зашифрованной копии</button><button class="btn secondary" id="bioSetupBtn" type="button">◈ Настроить Face ID / код устройства</button>
-<button class="btn secondary hidden" id="bioRemoveBtn" type="button">Отключить Face ID</button>
+<div class="pilot-inline hidden" id="settingsHint" role="status"></div><p class="bio-status" id="bioStatus" role="status">Проверяем доступность биометрии…</p><div class="idle-lock-setting"><label for="idleLockSelect">Автоблокировка</label><p>Когда блокировать сейф при бездействии? При сворачивании приложение блокируется всегда.</p><select id="idleLockSelect"><option value="0">Сразу при сворачивании</option><option value="1">Через 1 минуту</option><option value="5" selected>Через 5 минут</option><option value="15">Через 15 минут</option></select></div><div class="setting-actions"><button class="btn secondary" id="bioTestBtn" type="button">Проверить быстрый вход</button><button class="btn secondary" id="settingsPilot" type="button">Помощник настроек</button><button class="btn secondary" id="exportBtn" type="button">↓ Экспорт зашифрованной копии</button><button class="btn secondary" id="bioSetupBtn" type="button">◈ Настроить Face ID / Touch ID / код устройства</button>
+<button class="btn secondary hidden" id="bioRemoveBtn" type="button">Отключить быстрый вход</button>
 <button class="btn secondary" id="changeMasterBtn" type="button">⇄ Сменить мастер-пароль</button><button class="btn ghost" id="clearClipBtn" type="button">Очистить буфер обмена</button><button class="btn secondary" id="changeLanguageBtn" type="button">🌐 Язык / Language</button></div>
 </section>
 
@@ -69,13 +70,15 @@
 
 
 
-<nav aria-label="Разделы" class="bottom-nav" id="bottomNav"><button class="nav-item active" data-tab="vault" type="button">⌂ Сейф</button><button class="nav-item" data-tab="generator" type="button">⚡ Генератор</button><button class="nav-item" data-tab="audit" type="button">◇ Аудит</button><button class="nav-item" data-tab="settings" type="button">⚙ Настройки</button></nav></section>
-<section class="footer-tools"><label class="file-button" for="importFile">↑ Импорт зашифрованной копии</label><input accept=".json,.bastion,application/json" class="visually-hidden" id="importFile" type="file"/><div class="footer-caption">BASTION VAULT • v0.7 PRO • LOCAL FIRST</div></section>
+<section class="tab-page hidden" id="authPage"><h2>BASTION AUTH</h2><p>Одноразовые коды входа (2FA). Работают без интернета.</p><p class="warning">Для особо важных аккаунтов лучше хранить пароль и второй фактор отдельно. Сохрани резервные коды сервиса.</p><button class="btn primary full" id="addTotp" type="button">＋ Добавить код 2FA</button><button class="btn secondary full" id="authPilot" type="button">Помощник подключения</button><div id="totpList" class="entries"></div></section>
+<section class="tab-page hidden" id="connectPage"><h2>BASTION CONNECT</h2><p>Настройка защиты аккаунтов. BASTION не входит в чужие сервисы и не меняет пароли автоматически.</p><div id="connectList" class="entries"></div><button class="btn secondary full" id="pilotStart" type="button">Запустить помощника</button></section>
+<nav aria-label="Разделы" class="bottom-nav" id="bottomNav"><button class="nav-item active" data-tab="vault" type="button">⌂ Сейф</button><button class="nav-item" data-tab="generator" type="button">⚡ Генератор</button><button class="nav-item" data-tab="audit" type="button">◇ Аудит</button><button class="nav-item" data-tab="auth" type="button">2FA</button><button class="nav-item" data-tab="connect" type="button">Связь</button><button class="nav-item" data-tab="settings" type="button">⚙ Настройки</button></nav></section>
+<section class="footer-tools"><label class="file-button" for="importFile">↑ Импорт зашифрованной копии</label><input accept=".json,.bastion,application/json" class="visually-hidden" id="importFile" type="file"/><div class="footer-caption">BASTION VAULT • v0.8 TITAN • LOCAL FIRST</div></section>
 <div aria-live="polite" class="toast hidden" id="toast" role="status"></div>
 </main>
 <dialog class="modal" id="bioDialog">
 <div class="modal-inner">
-<div class="modal-header"><h2>Настройка Face ID</h2><button aria-label="Закрыть" class="icon-button" id="bioCancelBtn" type="button">✕</button></div>
+<div class="modal-header"><h2>Настройка биометрии</h2><button aria-label="Закрыть" class="icon-button" id="bioCancelBtn" type="button">✕</button></div>
 <p>Сначала подтверди текущий мастер-пароль. Затем отдельной кнопкой запусти создание ключа доступа. Поддержка PRF в Safari не гарантирована.</p>
 <form class="stack" id="bioVerifyForm">
 <label for="bioMaster">Текущий мастер-пароль</label>
@@ -87,7 +90,7 @@
 </dialog>
 <dialog class="modal" id="editor"><form class="modal-inner" id="editorForm" method="dialog" novalidate="">
 <div class="modal-header"><div><div class="eyebrow">ЗАЩИФРОВАННАЯ ЗАПИСЬ</div><h2 id="editorTitle">Новая запись</h2></div><button aria-label="Закрыть" class="icon-button" id="closeEditor" type="button">✕</button></div>
-<label for="service">Сервис / приложение</label><input autocomplete="off" id="service" maxlength="100" placeholder="Например, Telegram" required=""/>
+<button class="btn secondary" id="editorPilot" type="button">Помоги заполнить запись</button><div class="pilot-inline hidden" id="editorHint" role="status"></div><label for="service">Сервис / приложение</label><input autocomplete="off" id="service" maxlength="100" placeholder="Например, Telegram" required=""/>
 <label for="login">Логин / e-mail</label><input autocapitalize="off" autocomplete="off" id="login" maxlength="200" placeholder="Имя пользователя или почта" spellcheck="false"/>
 <label for="secret">Пароль</label><div class="password-row"><input autocapitalize="off" autocomplete="off" id="secret" maxlength="1024" placeholder="Введи или сгенерируй" spellcheck="false" type="password"/><button class="btn secondary small" id="showSecret" type="button">Показать</button></div>
 <div class="genrow"><label class="small-label" for="length">Длина</label><select id="length"><option value="16">16</option><option value="20">20</option><option selected="" value="24">24</option><option value="32">32</option><option value="48">48</option><option value="64">64</option></select><label class="small-label checklabel"><input checked="" id="symbols" type="checkbox"/> Символы</label><button class="btn secondary small" id="generateBtn" type="button">✦ Генерировать</button></div>
@@ -110,5 +113,7 @@
 <label for="masterConfirm">Повтори новый пароль</label><input autocomplete="off" id="masterConfirm" minlength="16" required="" type="password"/>
 <div class="form-buttons"><button class="btn primary" id="confirmMasterChange" type="submit">Зашифровать заново</button><button class="btn ghost" id="dismissMaster" type="button">Отмена</button></div>
 </form></dialog>
-</body>
+<dialog class="modal" id="totpDialog"><form class="modal-inner" id="totpForm"><div class="modal-header"><h2>Добавить 2FA</h2><button type="button" class="icon-button" id="totpClose">✕</button></div><label for="totpName">Название аккаунта</label><input id="totpName" maxlength="100" required placeholder="Google — личный" autocomplete="off"/><label for="totpSecret">Ключ настройки или ссылка otpauth://</label><input type="password" id="totpSecret" required maxlength="4096" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Вставь ключ из сервиса"/><button type="button" class="btn secondary" id="qrPhoto">Прочитать QR с фото</button><input class="visually-hidden" type="file" accept="image/*" id="qrFile"/><button type="button" class="btn secondary" id="qrCamera">Сканировать камерой</button><video id="qrVideo" class="hidden" playsinline muted></video><p id="qrStatus" role="status">Если сканирование недоступно, в сервисе выбери ручную настройку и скопируй ключ. На iPhone также можно попробовать распознать QR в Фото.</p><label for="totpEntry">Связать с записью сейфа (необязательно)</label><select id="totpEntry"></select><button class="btn primary" id="totpSave" type="submit">Сохранить 2FA</button><p>После сохранения введи код в исходном сервисе, чтобы закончить подключение. Не удаляй старый способ входа до проверки.</p><div id="pilotInline" class="pilot-inline hidden" role="status"></div></form></dialog>
+<dialog class="modal" id="pilotDialog"><div class="modal-inner"><div class="modal-header"><h2>BASTION PILOT</h2><button class="icon-button" id="pilotClose" type="button">✕</button></div><label for="pilotService">Сервис</label><select id="pilotService"></select><p id="pilotProgress"></p><h3 id="pilotTitle"></h3><p id="pilotText"></p><a id="pilotLink" class="btn secondary hidden" target="_blank" rel="noopener noreferrer">Открыть официальный сайт</a><button class="btn primary" id="pilotAction" type="button">Продолжить</button><button class="btn ghost" id="pilotBack" type="button">Назад</button></div></dialog>
+<dialog class="modal" id="reauthDialog"><div class="modal-inner"><div class="modal-header"><h2>Подтверди личность</h2><button type="button" class="icon-button" id="reauthClose">✕</button></div><p id="reauthMessage">Для этой операции требуется повторная проверка.</p><button type="button" class="btn secondary" id="reauthBio">Face ID / Touch ID / код устройства</button><form class="stack" id="reauthForm"><label for="reauthMaster">Или мастер-пароль</label><input id="reauthMaster" type="password" required autocomplete="off"/><button class="btn secondary" type="submit" id="reauthVerify">Подтвердить пароль</button></form><button class="btn primary hidden" type="button" id="reauthContinue">Продолжить</button></div></dialog></body>
 </html>
