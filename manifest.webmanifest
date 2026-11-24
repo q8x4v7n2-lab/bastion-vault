@@ -1,15 +1,25 @@
 {
-  "name":"BASTION VAULT — Личный сейф",
-  "short_name":"BASTION",
-  "description":"Локальный зашифрованный менеджер паролей без облака и аналитики",
-  "lang":"ru",
-  "start_url":"./index.html",
-  "scope":"./",
-  "display":"standalone",
-  "background_color":"#080D12",
-  "theme_color":"#080D12",
-  "icons":[
-    {"src":"./icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
-    {"src":"./icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  "name": "BASTION VAULT — Личный сейф",
+  "short_name": "BASTION",
+  "description": "Локальный зашифрованный менеджер паролей без облака и аналитики",
+  "lang": "ru",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07100f",
+  "theme_color": "#07100f",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }
